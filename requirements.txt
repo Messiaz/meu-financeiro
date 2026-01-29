@@ -1,0 +1,6 @@
+streamlit
+pandas
+plotly
+ofxtools
+# se usar a lib de ofx que usamos antes:
+# git+https://github.com/jseutter/ofxtools.git
