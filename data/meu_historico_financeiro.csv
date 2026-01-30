@@ -1,7 +1,0 @@
-Data,Valor,Descrição,ID_Transacao,Banco,Contabilizar,Segmento,Tipo,Categoria,Mes_Referencia,Status
-2025-01-03,-94.88,Outros gastos Tesouro Direto,2025010301,Banco C6 S.A.,True,PF,Débito,Investimento,Jan/2026,
-2025-01-06,0.04,Entradas RECEBIMENTO DE TED,2025010601,Banco C6 S.A.,True,PF,Débito,Salário,Jan/2026,
-2025-01-06,0.02,Entradas RECEBIMENTO DE TED,2025010602,Banco C6 S.A.,True,PF,Débito,Salário,Jan/2026,
-2025-01-07,380.38,Entradas RECEBIMENTO SALARIO,2025010701,Banco C6 S.A.,True,PF,Débito,Salário,Jan/2026,
-2025-01-13,-25.0,Outros gastos TAR 2A VIA-CART MULT,2025011301,Banco C6 S.A.,True,PF,Débito,Outros,Jan/2026,
-2025-01-13,33.08,Entrada PIX Pix recebido de GABRIEL MESSIAS MARQUES EIRAS,2025011302,Banco C6 S.A.,True,PF,Débito,Transferência,Jan/2026,
