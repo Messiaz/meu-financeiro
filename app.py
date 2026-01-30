@@ -2,38 +2,110 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
+import io
 from openfinance.loader import load_ofx_data
 from data.validator import predict_data, CAT_ENTRADAS, CAT_SAIDAS
 from data.persistence import save_to_database, load_database, delete_month_from_database
 
 st.set_page_config(page_title="Financeiro 360", layout="wide")
 
-# Inicialização da Fila Temporária (Memória do Tablet)
+# Inicialização da Fila Temporária
 if 'fila' not in st.session_state:
     st.session_state['fila'] = pd.DataFrame()
 
 def format_brl(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-st.title("🏦 Conciliação Unificada")
+st.title("🏦 Gestão Financeira Unificada")
 
-# --- SIDEBAR: GESTÃO DE ARQUIVOS ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("📤 Carregar Extratos")
-    arquivos = st.file_uploader("Selecione um ou mais OFX", type="ofx", accept_multiple_files=True)
+    arquivos = st.file_uploader("Selecione arquivos OFX", type="ofx", accept_multiple_files=True)
     
     if st.button("📥 Adicionar à Fila", use_container_width=True):
         if arquivos:
             list_dfs = []
             for arq in arquivos:
-                list_dfs.append(load_ofx_data(arq))
+                df_arq = load_ofx_data(arq)
+                list_dfs.append(df_arq)
             df_novos = pd.concat(list_dfs, ignore_index=True)
-            
-            # Combina com o que já estava na fila e remove duplicatas de ID
             res_fila = pd.concat([st.session_state['fila'], df_novos], ignore_index=True)
             st.session_state['fila'] = res_fila.drop_duplicates(subset=['ID_Transacao'])
-            st.success(f"Fila atualizada: {len(st.session_state['fila'])} itens.")
+            st.success(f"Fila: {len(st.session_state['fila'])} itens.")
         else:
+            st.warning("Selecione arquivos.")
+
+    st.divider()
+    st.header("➕ Registro Manual")
+    with st.expander("Dinheiro/Extras"):
+        desc_man = st.text_input("Descrição")
+        val_man = st.number_input("Valor ", step=0.01)
+        cat_man = st.selectbox("Categoria", CAT_ENTRADAS + CAT_SAIDAS)
+        data_man = st.date_input("Data ", datetime.now())
+        if st.button("Salvar Manual"):
+            novo_lanc = pd.DataFrame([{
+                'Data': data_man.strftime('%Y-%m-%d'),
+                'Descrição': desc_man,
+                'Valor': val_man,
+                'Categoria': cat_man,
+                'ID_Transacao': f"MAN-{datetime.now().timestamp()}",
+                'Banco': 'Manual',
+                'Tipo': '🟢 Crédito' if val_man > 0 else '🔴 Débito',
+                'Contabilizar': True
+            }])
+            save_to_database(novo_lanc, f"{data_man.strftime('%b')}/{data_man.year}")
+            st.success("Salvo!")
+            st.rerun()
+
+    st.divider()
+    mes_nome = st.selectbox("Mês", ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"])
+    ano_ref = st.selectbox("Ano", [2025, 2026])
+    label_ref = f"{mes_nome}/{ano_ref}"
+    
+    if st.button("🧹 Limpar Fila"):
+        st.session_state['fila'] = pd.DataFrame()
+        st.rerun()
+
+# Carregar histórico
+df_hist = load_database()
+
+# --- ABAS ---
+tab_conferir, tab_dash, tab_impostos = st.tabs(["📝 Conferência Unificada", "📈 Evolução", "🏛️ Impostos"])
+
+with tab_conferir:
+    if not st.session_state['fila'].empty:
+        df_input = predict_data(st.session_state['fila'], df_hist)
+        cols_ordem = ['Valor', 'Contabilizar', 'Categoria', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
+        df_view = df_input[cols_ordem]
+
+        df_edited = st.data_editor(
+            df_view,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
+                "Contabilizar": st.column_config.CheckboxColumn("✅"),
+                "Categoria": st.column_config.SelectboxColumn("Categoria", options=CAT_ENTRADAS + CAT_SAIDAS),
+                "Descrição_Visual": st.column_config.TextColumn("Descrição", width="large")
+            },
+            disabled=['Valor', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
+        )
+        
+        if st.button("🚀 SALVAR SELECIONADOS", type="primary"):
+            to_save = df_edited[df_edited['Contabilizar'] == True].copy()
+            if not to_save.empty:
+                ids_para_remover = to_save['ID_Transacao'].tolist()
+                if 'Descrição_Visual' in to_save.columns:
+                    to_save = to_save.drop(columns=['Descrição_Visual'])
+                save_to_database(to_save, label_ref)
+                st.session_state['fila'] = st.session_state['fila'][~st.session_state['fila']['ID_Transacao'].isin(ids_para_remover)]
+                st.success("Itens salvos!")
+                st.rerun()
+    else:
+        st.info("Fila vazia. Adicione OFX na lateral.")
+
+# (Dashboards e Impostos podem ser adicionados conforme os modelos anteriores)
             st.warning("Nenhum arquivo selecionado.")
 
     st.divider()
@@ -379,6 +451,7 @@ with tab_mensal:
     if not df_hist.empty:
         # Gráficos de pizza e barras por categoria
         st.write("Visualização de gastos e entradas mensais.")
+
 
 
 
