@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 import os
 from datetime import datetime
 from openfinance.loader import load_ofx_data
@@ -10,52 +8,112 @@ from data.persistence import save_to_database, load_database, delete_month_from_
 
 st.set_page_config(page_title="Financeiro 360", layout="wide")
 
-# Configuração de Pastas
-EXTRATOS_DIR = "extratos"
-if not os.path.exists(EXTRATOS_DIR): os.makedirs(EXTRATOS_DIR)
+# Inicialização da Fila Temporária (Memória do Tablet)
+if 'fila' not in st.session_state:
+    st.session_state['fila'] = pd.DataFrame()
 
 def format_brl(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-@st.cache_data
-def carregar_todos_extratos():
-    arquivos = [f for f in os.listdir(EXTRATOS_DIR) if f.endswith('.ofx')]
-    lista_df = []
-    for arq in arquivos:
-        caminho = os.path.join(EXTRATOS_DIR, arq)
-        try:
-            with open(caminho, 'rb') as f:
-                df_arq = load_ofx_data(f)
-                lista_df.append(df_arq)
-        except: continue
-    return pd.concat(lista_df, ignore_index=True) if lista_df else pd.DataFrame()
+st.title("🏦 Conciliação Unificada")
 
-st.title("🏦 Gestão Financeira Inteligente")
-
-# --- SIDEBAR: MOBILIDADE ---
+# --- SIDEBAR: GESTÃO DE ARQUIVOS ---
 with st.sidebar:
-    st.header("📤 Tablet: Enviar OFX")
-    uploaded_ofx = st.file_uploader("Upload", type="ofx")
-    if uploaded_ofx:
-        with open(os.path.join(EXTRATOS_DIR, uploaded_ofx.name), "wb") as f:
-            f.write(uploaded_ofx.getbuffer())
-        st.success("Extrato pronto!")
-        st.cache_data.clear()
+    st.header("📤 Carregar Extratos")
+    arquivos = st.file_uploader("Selecione um ou mais OFX", type="ofx", accept_multiple_files=True)
+    
+    if st.button("📥 Adicionar à Fila", use_container_width=True):
+        if arquivos:
+            list_dfs = []
+            for arq in arquivos:
+                list_dfs.append(load_ofx_data(arq))
+            df_novos = pd.concat(list_dfs, ignore_index=True)
+            
+            # Combina com o que já estava na fila e remove duplicatas de ID
+            res_fila = pd.concat([st.session_state['fila'], df_novos], ignore_index=True)
+            st.session_state['fila'] = res_fila.drop_duplicates(subset=['ID_Transacao'])
+            st.success(f"Fila atualizada: {len(st.session_state['fila'])} itens.")
+        else:
+            st.warning("Nenhum arquivo selecionado.")
 
     st.divider()
-    st.header("➕ Registro Manual")
-    with st.expander("Dinheiro/Extras"):
-        desc_man = st.text_input("Descrição")
-        val_man = st.number_input("Valor", step=0.01)
-        cat_man = st.selectbox("Categoria", CAT_ENTRADAS + CAT_SAIDAS)
-        data_man = st.date_input("Data", datetime.now())
-        if st.button("Salvar Registro"):
-            novo_lanc = pd.DataFrame([{
-                'Data': data_man.strftime('%Y-%m-%d'), 'Descrição': desc_man,
-                'Valor': val_man, 'Categoria': cat_man,
-                'ID_Transacao': f"MAN-{datetime.now().timestamp()}",
-                'Banco': 'Manual', 'Tipo': '🟢 Crédito' if val_man > 0 else '🔴 Débito',
-                'Contabilizar': True
+    mes_nome = st.selectbox("Mês", ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"])
+    ano_ref = st.selectbox("Ano", [2025, 2026])
+    label_ref = f"{mes_nome}/{ano_ref}"
+    
+    if st.button("🧹 Limpar Fila Temporária", use_container_width=True):
+        st.session_state['fila'] = pd.DataFrame()
+        st.rerun()
+
+# Carregar histórico salvo
+df_hist = load_database()
+
+# --- ABAS ---
+tab_conferir, tab_dash, tab_impostos = st.tabs(["📝 Conferência Unificada", "📈 Evolução", "🏛️ Impostos"])
+
+with tab_conferir:
+    if not st.session_state['fila'].empty:
+        # Validação (Sugerir categorias e checar duplicados no CSV)
+        df_input = predict_data(st.session_state['fila'], df_hist)
+        
+        # Ordem: Valor, Checkbox, Categoria
+        cols_ordem = ['Valor', 'Contabilizar', 'Categoria', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
+        df_view = df_input[cols_ordem]
+
+        st.subheader(f"Fila de Conferência para {label_ref}")
+        
+        df_edited = st.data_editor(
+            df_view,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
+                "Contabilizar": st.column_config.CheckboxColumn("✅"),
+                "Categoria": st.column_config.SelectboxColumn("Categoria", options=CAT_ENTRADAS + CAT_SAIDAS),
+                "Descrição_Visual": st.column_config.TextColumn("Descrição", width="large"),
+                "Status": st.column_config.TextColumn("Info")
+            },
+            disabled=['Valor', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
+        )
+        
+        if st.button("🚀 SALVAR SELECIONADOS NO HISTÓRICO", type="primary"):
+            to_save = df_edited[df_edited['Contabilizar'] == True].copy()
+            if not to_save.empty:
+                # Limpa colunas visuais antes de salvar no CSV
+                ids_para_remover = to_save['ID_Transacao'].tolist()
+                to_save = to_save.drop(columns=['Descrição_Visual'])
+                
+                save_to_database(to_save, label_ref)
+                
+                # Remove da fila apenas o que foi salvo
+                st.session_state['fila'] = st.session_state['fila'][~st.session_state['fila']['ID_Transacao'].isin(ids_para_remover)]
+                
+                st.success(f"{len(to_save)} itens salvos!")
+                st.rerun()
+    else:
+        st.info("A fila está vazia. Adicione arquivos OFX pela barra lateral.")
+
+with tab_dash:
+    if not df_hist.empty:
+        st.subheader(f"Dashboard - {label_ref}")
+        df_v = df_hist[df_hist['Mes_Referencia'] == label_ref]
+        if not df_v.empty:
+            ent = df_v[df_v['Valor'] > 0]['Valor'].sum()
+            sai = abs(df_v[df_v['Valor'] < 0]['Valor'].sum())
+            c1, c2 = st.columns(2)
+            c1.metric("Entradas", format_brl(ent))
+            c2.metric("Saídas", format_brl(sai))
+            
+            fig = px.pie(df_v, values=df_v['Valor'].abs(), names='Categoria', hole=0.5)
+            st.plotly_chart(fig, use_container_width=True)
+
+with tab_impostos:
+    if not df_hist.empty:
+        st.header("🏛️ Impostos e MEI")
+        df_hist['Data_DT'] = pd.to_datetime(df_hist['Data'], errors='coerce')
+        fat_mei = df_hist[(df_hist['Categoria'] == "Aulas Particulares - MEI") & (df_hist['Data_DT'].dt.year == ano_ref)]['Valor'].sum()
+        st.metric("Faturamento MEI Acumulado", format_brl(fat_mei))
+        st.progress(min(fat_mei/81000, 1.0), text=f"{int((fat_mei/81000)*100)}% do limite")
             }])
             save_to_database(novo_lanc, f"{data_man.strftime('%b')}/{data_man.year}")
             st.rerun()
@@ -66,6 +124,75 @@ with st.sidebar:
     label_ref = f"{mes_nome}/{ano_ref}"
     
     if st.button(f"🗑️ Limpar {label_ref}"):
+        delete_month_from_database(label_ref)
+        st.rerun()
+
+df_all = carregar_todos_extratos()
+df_hist = load_database()
+
+# --- ABAS ---
+tab_concilia, tab_dash, tab_impostos = st.tabs(["📝 Conciliação", "📈 Dashboards", "🏛️ Impostos"])
+
+with tab_concilia:
+    if not df_all.empty:
+        meses_map = {"Jan":1,"Fev":2,"Mar":3,"Abr":4,"Mai":5,"Jun":6,"Jul":7,"Ago":8,"Set":9,"Out":10,"Nov":11,"Dez":12}
+        df_all['Data_DT'] = pd.to_datetime(df_all['Data'], format='mixed', errors='coerce')
+        df_mes = df_all[(df_all['Data_DT'].dt.month == meses_map[mes_nome]) & (df_all['Data_DT'].dt.year == ano_ref)].copy()
+        
+        if not df_mes.empty:
+            df_input = predict_data(df_mes, df_hist)
+            # Reordenando: Valor, Checkbox, Categoria
+            cols_ordem = ['Valor', 'Contabilizar', 'Categoria', 'Descrição_Visual', 'Status', 'Data', 'Banco']
+            df_input = df_input[cols_ordem]
+
+            df_edited = st.data_editor(df_input, hide_index=True, use_container_width=True,
+                column_config={
+                    "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
+                    "Contabilizar": st.column_config.CheckboxColumn("✅"),
+                    "Categoria": st.column_config.SelectboxColumn("Categoria", options=CAT_ENTRADAS + CAT_SAIDAS),
+                    "Descrição_Visual": st.column_config.TextColumn("Descrição", width="large")
+                },
+                disabled=['Valor', 'Descrição_Visual', 'Status', 'Data', 'Banco'])
+            
+            if st.button("🚀 CONTABILIZAR MARCADOS", type="primary"):
+                to_save = df_edited[df_edited['Contabilizar'] == True].copy()
+                if not to_save.empty:
+                    if 'Descrição_Visual' in to_save.columns: to_save = to_save.drop(columns=['Descrição_Visual'])
+                    save_to_database(to_save, label_ref)
+                    st.success("Salvo com sucesso!")
+                    st.rerun()
+    else: st.info("Suba um arquivo OFX para começar.")
+
+with tab_dash:
+    if not df_hist.empty:
+        df_hist['Data_DT'] = pd.to_datetime(df_hist['Data'], format='mixed')
+        # Gráficos Evolução Mensal
+        df_v = df_hist[df_hist['Mes_Referencia'] == label_ref].copy()
+        if not df_v.empty:
+            st.subheader(f"Resumo {label_ref}")
+            ent = df_v[df_v['Valor'] > 0]['Valor'].sum()
+            sai = abs(df_v[df_v['Valor'] < 0]['Valor'].sum())
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Entradas", format_brl(ent))
+            c2.metric("Saídas", format_brl(sai))
+            c3.metric("Saldo", format_brl(ent - sai))
+            
+            fig = px.bar(df_v, x="Categoria", y="Valor", color="Categoria", title="Gastos por Categoria")
+            st.plotly_chart(fig, use_container_width=True)
+
+with tab_impostos:
+    st.header("🏛️ Planejamento Tributário")
+    if not df_hist.empty:
+        # Lógica MEI
+        faturamento_mei = df_hist[(df_hist['Categoria'] == "Aulas Particulares - MEI")]['Valor'].sum()
+        st.metric("Faturamento Acumulado MEI", format_brl(faturamento_mei))
+        st.progress(min(faturamento_mei/81000, 1.0), text=f"{int((faturamento_mei/81000)*100)}% do limite anual")
+        
+        # Deduções
+        dedutivel = df_hist[df_hist['Categoria'].str.contains("Dedutível", na=False)]
+        st.write("### Deduções previstas (IRPF)")
+        st.metric("Total Dedutível", format_brl(abs(dedutivel['Valor'].sum())))
+        st.dataframe(dedutivel[['Data', 'Descrição', 'Valor', 'Categoria']], hide_index=True)
         delete_month_from_database(label_ref)
         st.rerun()
 
@@ -252,5 +379,6 @@ with tab_mensal:
     if not df_hist.empty:
         # Gráficos de pizza e barras por categoria
         st.write("Visualização de gastos e entradas mensais.")
+
 
 
