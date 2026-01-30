@@ -17,5 +17,5 @@ def save_to_database(df_new, label_ref):
 def delete_month_from_database(label_ref):
     df = load_database()
     if not df.empty:
-        df_filtered = df[df['Mes_Referencia'] != label_ref]
-        df_filtered.to_csv(DB_PATH, index=False)
+        df = df[df['Mes_Referencia'] != label_ref]
+        df.to_csv(DB_PATH, index=False)
