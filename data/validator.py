@@ -26,7 +26,7 @@ def predict_data(df, df_hist, nome_usuario):
         valor = row['Valor']
 
         # INVESTIMENTOS
-        if any(k in desc for k in ["tesouro", "cdi", "rdb", "invest", "aplic", "resgate", "lca", "lci"]):
+        if any(k in desc for k in ["tesouro", "cdi", "rdb", "invest", "aplic", "resgate", "aplicação", "lca", "lci"]):
             df.at[i, 'Categoria'] = "Investimentos"
             continue
 
