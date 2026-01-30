@@ -3,36 +3,40 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 def load_database(username="default"):
+    # Limpa o nome para evitar erro de aba no Sheets
+    safe_user = "".join(x for x in username if x.isalnum()) or "Geral"
+    
+    conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        return conn.read(worksheet=username, ttl=0)
-    except:
-        # Colunas padrão que a planilha DEVE ter
+        # ttl=0 força o app a buscar o dado novo, ignorando o cache
+        df = conn.read(worksheet=safe_user, ttl=0)
+        return df
+    except Exception:
+        # Se a aba não existir, retorna a estrutura correta
         return pd.DataFrame(columns=['ID_Transacao', 'Data', 'Descrição', 'Valor', 'Categoria', 'Tipo', 'Segmento', 'Mes_Referencia'])
 
 def save_to_database(df_new, label_ref, username="default"):
+    safe_user = "".join(x for x in username if x.isalnum()) or "Geral"
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df_old = load_database(username)
     
-    # Define as colunas que queremos salvar
-    colunas_esperadas = ['ID_Transacao', 'Data', 'Descrição', 'Valor', 'Categoria', 'Tipo', 'Segmento', 'Mes_Referencia']
+    # 1. Busca o histórico atual
+    df_old = load_database(safe_user)
     
-    # Garante que o df_new tenha a coluna de referência
+    # 2. Prepara os novos dados
     df_new['Mes_Referencia'] = label_ref
+    colunas = ['ID_Transacao', 'Data', 'Descrição', 'Valor', 'Categoria', 'Tipo', 'Segmento', 'Mes_Referencia']
     
-    # MÁGICA CONTRA O KEYERROR: 
-    # Se alguma coluna esperada não estiver no df_new, cria ela como vazia
-    for col in colunas_esperadas:
+    # Garante que as colunas existam
+    for col in colunas:
         if col not in df_new.columns:
             df_new[col] = ""
-
-    # Agora filtramos apenas as colunas que a planilha aceita, sem risco de erro
-    df_to_save = df_new[colunas_esperadas]
+            
+    # 3. Une e remove duplicatas (mantendo o que foi editado por último)
+    df_final = pd.concat([df_old[colunas], df_new[colunas]]).drop_duplicates(subset=['ID_Transacao'], keep='last')
     
-    # Une com o histórico e remove duplicatas
-    df_final = pd.concat([df_old, df_to_save]).drop_duplicates(subset=['ID_Transacao'], keep='last')
+    # 4. O segredo para não dar erro de permissão:
+    # No Streamlit Cloud, você usará a URL da planilha que permite edição
+    conn.update(worksheet=safe_user, data=df_final)
     
-    # Envia para o Google Sheets
-    conn.update(worksheet=username, data=df_final)
-    st.cache_data.clear()
-    st.success(f"Dados sincronizados com sucesso para {username}!")
+    st.cache_data.clear() # Limpa o cache global para atualizar os gráficos
+    st.success(f"📌 Dados salvos na aba '{safe_user}' do Google Sheets!")
