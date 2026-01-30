@@ -121,14 +121,34 @@ with tab_impostos:
 
 # --- OUTRAS ABAS (Resumidas para o código completo) ---
 with tab_concilia:
-    # (Mesma lógica de edição de dados e salvar no histórico enviada anteriormente)
     if not df_all.empty:
-        st.write(f"Conciliando: {label_ref}")
-        # ... logic ...
-        st.info("Dados do extrato prontos para validação.")
-    else: st.info("Suba um arquivo OFX no tablet para começar.")
-
+        meses_map = {"Jan":1,"Fev":2,"Mar":3,"Abr":4,"Mai":5,"Jun":6,"Jul":7,"Ago":8,"Set":9,"Out":10,"Nov":11,"Dez":12}
+        
+        # Converter para data garantindo que não dê erro
+        df_all['Data_DT'] = pd.to_datetime(df_all['Data'], errors='coerce')
+        
+        # Filtra pelo mês e ano selecionados
+        df_mes = df_all[
+            (df_all['Data_DT'].dt.month == meses_map[mes_nome]) & 
+            (df_all['Data_DT'].dt.year == ano_ref)
+        ].copy()
+        
+        if df_mes.empty:
+            st.warning(f"Nenhuma transação (incluindo transferências) encontrada para {label_ref}. Verifique a data no arquivo OFX.")
+            # Opcional: mostrar as últimas 5 transações do arquivo para depuração
+            st.write("Últimas transações lidas do arquivo:")
+            st.write(df_all.tail(5))
+        else:
+            # Chama o validator que agora aceita transferências
+            df_input = predict_data(df_mes, df_hist)
+            
+            # EXIBIÇÃO NA TABELA
+            df_edited = st.data_editor(
+                df_input,
+                # ... (restante das configurações do data_editor permanecem iguais)
+            )
 with tab_mensal:
     if not df_hist.empty:
         # Gráficos de pizza e barras por categoria
         st.write("Visualização de gastos e entradas mensais.")
+
