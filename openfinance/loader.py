@@ -3,12 +3,8 @@ from ofxparse import OfxParser
 import io
 
 def load_ofx_data(file_obj):
-    # Suporte para bytes do Streamlit uploader
-    if isinstance(file_obj, (bytes, io.BytesIO)):
-        ofx = OfxParser.parse(file_obj)
-    else:
-        ofx = OfxParser.parse(file_obj)
-        
+    # Aceita arquivo do Streamlit (BytesIO) ou arquivo local
+    ofx = OfxParser.parse(file_obj)
     transactions = []
     for account in ofx.accounts:
         for transaction in account.statement.transactions:
