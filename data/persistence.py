@@ -1,24 +1,27 @@
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import os
 
-DB_PATH = "data/meu_historico_financeiro.csv"
+def load_database(username="default"):
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    try:
+        # Tenta ler a aba específica do usuário
+        df = conn.read(worksheet=username)
+        return df
+    except:
+        # Se a aba não existir, retorna um DataFrame vazio com as colunas certas
+        return pd.DataFrame(columns=['ID_Transacao', 'Data', 'Descrição', 'Valor', 'Categoria', 'Tipo', 'Segmento', 'Status', 'Mes_Referencia'])
 
-def load_database():
-    if os.path.exists(DB_PATH):
-        return pd.read_csv(DB_PATH)
-    return pd.DataFrame()
-
-def save_to_database(df_new, label_ref):
-    df_new['Mes_Referencia'] = label_ref
-    df_old = load_database()
-    df_final = pd.concat([df_old, df_new]).drop_duplicates(subset=['ID_Transacao'], keep='last')
+def save_to_database(df_new, label_ref, username="default"):
+    conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # Garante que a pasta exista
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    df_final.to_csv(DB_PATH, index=False)
-
-def delete_month_from_database(label_ref):
-    df = load_database()
-    if not df.empty:
-        df = df[df['Mes_Referencia'] != label_ref]
-        df.to_csv(DB_PATH, index=False)
+    # 1. Carrega o que já existe
+    df_old = load_database(username)
+    
+    # 2. Adiciona o novo e remove duplicatas
+    df_new['Mes_Referencia'] = label_ref
+    df_final = pd.concat([df_old, df_new]).drop_duplicates(subset=['ID_Transacao'], keep='first')
+    
+    # 3. Salva de volta na aba do usuário
+    conn.update(worksheet=username, data=df_final)
+    st.success(f"Dados salvos com sucesso na nuvem para {username}!")
