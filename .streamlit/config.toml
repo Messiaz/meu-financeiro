@@ -2,4 +2,4 @@
 runOnSave = true
 
 [connections.gsheets]
-spreadsheet = "https://docs.google.com/spreadsheets/d/1FdQC52yFEkuTFCQRaWTxECcKPJXID_VPmmoydLctnuM/edit?gid=0#gid=0"
+spreadsheet = "https://docs.google.com/spreadsheets/d/1FdQC52yFEkuTFCQRaWTxECcKPJXID_VPmmoydLctnuM/edit?usp=sharing"
