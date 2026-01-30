@@ -185,7 +185,7 @@ with tab_impostos:
         df_hist['Data_DT'] = pd.to_datetime(df_hist['Data'], errors='coerce')
         fat_mei = df_hist[(df_hist['Categoria'] == "Aulas Particulares - MEI") & (df_hist['Data_DT'].dt.year == ano_ref)]['Valor'].sum()
         st.metric("Faturamento MEI Acumulado", format_brl(fat_mei))
-        st.progress(min(fat_mei/81000, 1.0), text=f"{int((fat_mei/81000)*100)}% do limite")}])
+        st.progress(min(fat_mei/81000, 1.0), text=f"{int((fat_mei/81000)*100)}% do limite")
         save_to_database(novo_lanc, f"{data_man.strftime('%b')}/{data_man.year}")
         st.rerun()
 
@@ -450,6 +450,7 @@ with tab_mensal:
     if not df_hist.empty:
         # Gráficos de pizza e barras por categoria
         st.write("Visualização de gastos e entradas mensais.")
+
 
 
 
