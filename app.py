@@ -105,8 +105,8 @@ with tab_conferir:
     else:
         st.info("Fila vazia. Adicione OFX na lateral.")
 
-# (Dashboards e Impostos podem ser adicionados conforme os modelos anteriores)
-            st.warning("Nenhum arquivo selecionado.")
+         # (Dashboards e Impostos podem ser adicionados conforme os modelos anteriores)
+        st.warning("Nenhum arquivo selecionado.")
 
     st.divider()
     mes_nome = st.selectbox("Mês", ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"])
@@ -451,6 +451,7 @@ with tab_mensal:
     if not df_hist.empty:
         # Gráficos de pizza e barras por categoria
         st.write("Visualização de gastos e entradas mensais.")
+
 
 
 
