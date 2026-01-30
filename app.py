@@ -80,13 +80,45 @@ df_hist = load_database()
 # --- ABAS ---
 tab_conferir, tab_dash, tab_impostos = st.tabs(["📝 Conferência Unificada", "📈 Evolução", "🏛️ Impostos"])
 
+# with tab_conferir:
+#     if not st.session_state['fila'].empty:
+#         df_input = predict_data(st.session_state['fila'], df_hist)
+#         cols_ordem = ['Valor', 'Contabilizar', 'Categoria', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
+#         df_view = df_input[cols_ordem]
+
+#         st.subheader(f"Transações Pendentes")
+#         df_edited = st.data_editor(
+#             df_view,
+#             hide_index=True,
+#             use_container_width=True,
+#             column_config={
+#                 "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
+#                 "Contabilizar": st.column_config.CheckboxColumn("✅"),
+#                 "Categoria": st.column_config.SelectboxColumn("Categoria", options=CAT_ENTRADAS + CAT_SAIDAS),
+#                 "Descrição_Visual": st.column_config.TextColumn("Descrição", width="large")
+#             },
+#             disabled=['Valor', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
+#         )
+        
+#         if st.button("🚀 SALVAR SELECIONADOS NO HISTÓRICO", type="primary"):
+#             to_save = df_edited[df_edited['Contabilizar'] == True].copy()
+#             if not to_save.empty:
+#                 ids_para_remover = to_save['ID_Transacao'].tolist()
+#                 if 'Descrição_Visual' in to_save.columns:
+#                     to_save = to_save.drop(columns=['Descrição_Visual'])
+#                 save_to_database(to_save, label_ref)
+#                 st.session_state['fila'] = st.session_state['fila'][~st.session_state['fila']['ID_Transacao'].isin(ids_para_remover)]
+#                 st.success("Itens salvos!")
+#                 st.rerun()
 with tab_conferir:
     if not st.session_state['fila'].empty:
         df_input = predict_data(st.session_state['fila'], df_hist)
-        cols_ordem = ['Valor', 'Contabilizar', 'Categoria', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
+        
+        # NOVA ORDEM: Valor, Checkbox, Categoria, Segmento, Tipo...
+        cols_ordem = ['Valor', 'Contabilizar', 'Categoria', 'Segmento', 'Tipo', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
         df_view = df_input[cols_ordem]
 
-        st.subheader(f"Transações Pendentes")
+        st.subheader("📋 Conferência Unificada")
         df_edited = st.data_editor(
             df_view,
             hide_index=True,
@@ -95,20 +127,26 @@ with tab_conferir:
                 "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
                 "Contabilizar": st.column_config.CheckboxColumn("✅"),
                 "Categoria": st.column_config.SelectboxColumn("Categoria", options=CAT_ENTRADAS + CAT_SAIDAS),
+                "Segmento": st.column_config.SelectboxColumn("Segmento", options=["PF", "MEI"]),
+                "Tipo": st.column_config.TextColumn("Tipo"),
                 "Descrição_Visual": st.column_config.TextColumn("Descrição", width="large")
             },
-            disabled=['Valor', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
+            disabled=['Valor', 'Tipo', 'Descrição_Visual', 'Status', 'Data', 'Banco', 'ID_Transacao']
         )
         
         if st.button("🚀 SALVAR SELECIONADOS NO HISTÓRICO", type="primary"):
             to_save = df_edited[df_edited['Contabilizar'] == True].copy()
             if not to_save.empty:
                 ids_para_remover = to_save['ID_Transacao'].tolist()
+                # Removemos apenas a coluna visual, mantemos Segmento e Tipo para o CSV
                 if 'Descrição_Visual' in to_save.columns:
                     to_save = to_save.drop(columns=['Descrição_Visual'])
+                
                 save_to_database(to_save, label_ref)
+                
+                # Atualiza a fila removendo o que foi salvo
                 st.session_state['fila'] = st.session_state['fila'][~st.session_state['fila']['ID_Transacao'].isin(ids_para_remover)]
-                st.success("Itens salvos!")
+                st.success(f"{len(to_save)} transações contabilizadas!")
                 st.rerun()
     else:
         st.info("Fila vazia. Adicione OFX na lateral.")

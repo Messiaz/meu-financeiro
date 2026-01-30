@@ -9,15 +9,34 @@ def predict_data(df, df_hist=None):
     
     ids_salvos = df_hist['ID_Transacao'].astype(str).unique() if df_hist is not None and not df_hist.empty else []
     
+    # Status e Descrição Visual
     df['Status'] = df['ID_Transacao'].astype(str).apply(lambda x: "❌ JÁ SALVO" if x in ids_salvos else "✅ NOVO")
     df['Descrição_Visual'] = df.apply(lambda x: f"⚠️ {x['Descrição']}" if x['Status'] == "❌ JÁ SALVO" else x['Descrição'], axis=1)
-    df['Contabilizar'] = df['Status'] == "✅ NOVO" # Auto-marca novos itens
+    df['Contabilizar'] = df['Status'] == "✅ NOVO"
     
-    def sugerir(row):
+    # Lógica de Tipo (Crédito/Débito)
+    # df['Tipo'] = df['Valor'].apply(lambda x: '🟢 Crédito' if x > 0 else '🔴 Débito')
+    df['Tipo'] = df['Valor'].apply(lambda x: 'Débito')
+    
+    # Sugestão de Categoria e Segmento (PF/MEI)
+    def classificar(row):
         desc = str(row['Descrição']).upper()
-        if any(w in desc for w in ["PIX", "TRANSF", "TED"]): return "Transferência"
-        if row['Valor'] > 0: return "Aulas Particulares - MEI"
-        return "Outros"
+        valor = row['Valor']
         
-    df['Categoria'] = df.apply(sugerir, axis=1)
+        if any(w in desc for w in ["PIX", "TRANSF", "TED"]):
+            return "Transferência", "PF"
+        
+        if valor > 0:
+            return "Aulas Particulares - MEI", "MEI" # Sugestão padrão para entradas
+        
+        if any(w in desc for w in ["DAS ", "MEI", "SIMPLES"]):
+            return "MEI", "MEI"
+            
+        return "Outros", "PF"
+        
+    # Aplica a classificação dupla
+    classificacao = df.apply(classificar, axis=1)
+    df['Categoria'] = [x[0] for x in classificacao]
+    df['Segmento'] = [x[1] for x in classificacao]
+    
     return df
