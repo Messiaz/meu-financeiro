@@ -21,7 +21,7 @@ def predict_data(df, df_hist=None):
         lambda x: f"⚠️ {x['Descrição']}" if x['Status'] == "❌ JÁ SALVO" else x['Descrição'], axis=1
     )
 
-    df['Contabilizar'] = False 
+    df['Contabilizar'] = True 
     df['Segmento'] = "PF"
     df['Tipo'] = df['Valor'].apply(lambda x: '🟢 Crédito' if x > 0 else '🔴 Débito')
     
@@ -37,3 +37,4 @@ def predict_data(df, df_hist=None):
     df['Categoria'] = df.apply(sugerir_categoria, axis=1)
     
     return df
+
