@@ -2,3 +2,5 @@ st-gsheets-connection
 pandas
 openfinance
 plotly
+streamlit
+ofxparse
