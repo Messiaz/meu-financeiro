@@ -1,7 +1,7 @@
 import pandas as pd
 
 CAT_ENTRADAS = ["Salário", "Aulas Particulares - MEI", "Rendimento", "Transferência", "Outros"]
-CAT_SAIDAS = ["Alimentação", "Lazer", "Investimento", "Saúde (Dedutível)", "Educação (Dedutível)", 
+CAT_SAIDAS = ["Alimentação", "Fatura", "Lazer", "Investimento", "Saúde (Dedutível)", "Educação (Dedutível)", 
               "Livros", "Remédios","Estudos", "Trabalho", "Transporte", "Manutenção", "MEI", "Impostos", "Outros"]
 
 def predict_data(df, df_hist=None):
@@ -16,3 +16,4 @@ def predict_data(df, df_hist=None):
     df['Tipo'] = df['Valor'].apply(lambda x: 'Débito')
     df['Categoria'] = df['Valor'].apply(lambda x: "Salário" if x > 0 else "Outros")
     return df
+
